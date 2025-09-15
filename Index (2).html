@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Catch the Fruits 🍎🍌🍊</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #87CEEB 0%, #98FB98 100%);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            max-width: 800px;
+            max-height: 600px;
+            background: linear-gradient(180deg, #87CEEB 0%, #90EE90 100%);
+            border: 3px solid #4682B4;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        #gameCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            z-index: 200;
+            display: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        #gameOver h1 {
+            color: #ff4444;
+            margin-bottom: 20px;
+            font-size: 36px;
+        }
+
+        #gameOver p {
+            font-size: 24px;
+            margin: 15px 0;
+        }
+
+        #restartBtn {
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            font-size: 20px;
+            border-radius: 25px;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: transform 0.2s;
+        }
+
+        #restartBtn:hover {
+            transform: scale(1.05);
+        }
+
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #fff;
+            font-size: 16px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            z-index: 100;
+        }
+
+        @media (max-width: 768px) {
+            #ui {
+                font-size: 20px;
+                top: 10px;
+                left: 10px;
+            }
+            
+            #gameOver {
+                padding: 30px;
+                margin: 20px;
+            }
+            
+            #gameOver h1 {
+                font-size: 28px;
+            }
+            
+            #gameOver p {
+                font-size: 18px;
+            }
+            
+            #restartBtn {
+                font-size: 18px;
+                padding: 12px 25px;
+            }
+            
+            #instructions {
+                bottom: 10px;
+                left: 10px;
+                font-size: 14px;
+            }
+        }
+
+        .fruit {
+            position: absolute;
+            font-size: 40px;
+            z-index: 50;
+        }
+
+        .basket {
+            position: absolute;
+            bottom: 20px;
+            font-size: 60px;
+            z-index: 50;
+            transition: left 0.1s ease;
+        }
+
+        @media (max-width: 480px) {
+            .fruit {
+                font-size: 35px;
+            }
+            
+            .basket {
+                font-size: 50px;
+                bottom: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="ui">
+            <div>Score: <span id="score">0</span></div>
+            <div>Misses: <span id="misses">0</span>/5</div>
+        </div>
+        
+        <div id="instructions">
+            🎮 Use ← → arrow keys or touch to move basket
+        </div>
+        
+        <div id="gameOver">
+            <h1>Game Over! 🎮</h1>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <p id="gameOverMessage"></p>
+            <button id="restartBtn">Play Again 🔄</button>
+        </div>
+        
+        <div id="basket" class="basket">🧺</div>
+    </div>
+
+    <script>
+        class FruitCatcherGame {
+            constructor() {
+                this.gameContainer = document.getElementById('gameContainer');
+                this.basket = document.getElementById('basket');
+                this.scoreElement = document.getElementById('score');
+                this.missesElement = document.getElementById('misses');
+                this.gameOverScreen = document.getElementById('gameOver');
+                this.finalScoreElement = document.getElementById('finalScore');
+                this.gameOverMessage = document.getElementById('gameOverMessage');
+                this.restartBtn = document.getElementById('restartBtn');
+                
+                this.score = 0;
+                this.misses = 0;
+                this.maxMisses = 5;
+                this.gameRunning = false;
+                this.fruits = [];
+                this.fruitTypes = ['🍎', '🍌', '🍊', '🍓', '🍇', '🥝', '🍑', '🍒'];
+                this.basketSpeed = 8;
+                this.fruitSpeed = 2;
+                this.spawnRate = 0.02;
+                
+                this.keys = {
+                    left: false,
+                    right: false
+                };
+                
+                this.initializeGame();
+                this.setupEventListeners();
+                this.startGame();
+            }
+            
+            initializeGame() {
+                const containerRect = this.gameContainer.getBoundingClientRect();
+                this.gameWidth = this.gameContainer.offsetWidth;
+                this.gameHeight = this.gameContainer.offsetHeight;
+                
+                // Position basket in center
+                this.basketX = this.gameWidth / 2 - 30;
+                this.updateBasketPosition();
+            }
+            
+            setupEventListeners() {
+                // Keyboard controls
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'ArrowLeft') {
+                        this.keys.left = true;
+                        e.preventDefault();
+                    }
+                    if (e.key === 'ArrowRight') {
+                        this.keys.right = true;
+                        e.preventDefault();
+                    }
+                });
+                
+                document.addEventListener('keyup', (e) => {
+                    if (e.key === 'ArrowLeft') {
+                        this.keys.left = false;
+                    }
+                    if (e.key === 'ArrowRight') {
+                        this.keys.right = false;
+                    }
+                });
+                
+                // Touch controls
+                let touchStartX = null;
+                let touchCurrentX = null;
+                
+                this.gameContainer.addEventListener('touchstart', (e) => {
+                    touchStartX = e.touches[0].clientX;
+                    touchCurrentX = touchStartX;
+                    e.preventDefault();
+                });
+                
+                this.gameContainer.addEventListener('touchmove', (e) => {
+                    if (touchStartX !== null) {
+                        touchCurrentX = e.touches[0].clientX;
+                        const deltaX = touchCurrentX - touchStartX;
+                        this.basketX += deltaX * 0.5;
+                        this.constrainBasket();
+                        this.updateBasketPosition();
+                        touchStartX = touchCurrentX;
+                    }
+                    e.preventDefault();
+                });
+                
+                this.gameContainer.addEventListener('touchend', () => {
+                    touchStartX = null;
+                    touchCurrentX = null;
+                });
+                
+                // Restart button
+                this.restartBtn.addEventListener('click', () => {
+                    this.restartGame();
+                });
+                
+                // Handle window resize
+                window.addEventListener('resize', () => {
+                    this.initializeGame();
+                });
+            }
+            
+            startGame() {
+                this.gameRunning = true;
+                this.gameLoop();
+            }
+            
+            gameLoop() {
+                if (!this.gameRunning) return;
+                
+                this.handleInput();
+                this.spawnFruit();
+                this.updateFruits();
+                this.checkCollisions();
+                this.cleanupFruits();
+                
+                if (this.misses >= this.maxMisses) {
+                    this.endGame();
+                    return;
+                }
+                
+                requestAnimationFrame(() => this.gameLoop());
+            }
+            
+            handleInput() {
+                if (this.keys.left) {
+                    this.basketX -= this.basketSpeed;
+                }
+                if (this.keys.right) {
+                    this.basketX += this.basketSpeed;
+                }
+                
+                this.constrainBasket();
+                this.updateBasketPosition();
+            }
+            
+            constrainBasket() {
+                if (this.basketX < 0) this.basketX = 0;
+                if (this.basketX > this.gameWidth - 60) this.basketX = this.gameWidth - 60;
+            }
+            
+            updateBasketPosition() {
+                this.basket.style.left = this.basketX + 'px';
+            }
+            
+            spawnFruit() {
+                if (Math.random() < this.spawnRate) {
+                    const fruit = {
+                        x: Math.random() * (this.gameWidth - 40),
+                        y: -40,
+                        type: this.fruitTypes[Math.floor(Math.random() * this.fruitTypes.length)],
+                        element: null
+                    };
+                    
+                    const fruitElement = document.createElement('div');
+                    fruitElement.className = 'fruit';
+                    fruitElement.textContent = fruit.type;
+                    fruitElement.style.left = fruit.x + 'px';
+                    fruitElement.style.top = fruit.y + 'px';
+                    
+                    fruit.element = fruitElement;
+                    this.gameContainer.appendChild(fruitElement);
+                    this.fruits.push(fruit);
+                }
+            }
+            
+            updateFruits() {
+                this.fruits.forEach(fruit => {
+                    fruit.y += this.fruitSpeed;
+                    fruit.element.style.top = fruit.y + 'px';
+                });
+            }
+            
+            checkCollisions() {
+                const basketRect = {
+                    left: this.basketX,
+                    right: this.basketX + 60,
+                    top: this.gameHeight - 80,
+                    bottom: this.gameHeight - 20
+                };
+                
+                this.fruits.forEach((fruit, index) => {
+                    const fruitRect = {
+                        left: fruit.x,
+                        right: fruit.x + 40,
+                        top: fruit.y,
+                        bottom: fruit.y + 40
+                    };
+                    
+                    // Check collision with basket
+                    if (fruitRect.left < basketRect.right &&
+                        fruitRect.right > basketRect.left &&
+                        fruitRect.top < basketRect.bottom &&
+                        fruitRect.bottom > basketRect.top) {
+                        
+                        this.catchFruit(index);
+                        return;
+                    }
+                    
+                    // Check if fruit fell off screen
+                    if (fruit.y > this.gameHeight) {
+                        this.missFruit(index);
+                    }
+                });
+            }
+            
+            catchFruit(index) {
+                const fruit = this.fruits[index];
+                this.score += 10;
+                this.scoreElement.textContent = this.score;
+                
+                // Remove fruit element and from array
+                fruit.element.remove();
+                this.fruits.splice(index, 1);
+                
+                // Add some visual feedback
+                this.basket.style.transform = 'scale(1.1)';
+                setTimeout(() => {
+                    this.basket.style.transform = 'scale(1)';
+                }, 100);
+                
+                // Increase difficulty slightly
+                if (this.score % 100 === 0) {
+                    this.fruitSpeed += 0.5;
+                    this.spawnRate += 0.005;
+                }
+            }
+            
+            missFruit(index) {
+                const fruit = this.fruits[index];
+                this.misses++;
+                this.missesElement.textContent = this.misses;
+                
+                // Remove fruit element and from array
+                fruit.element.remove();
+                this.fruits.splice(index, 1);
+            }
+            
+            cleanupFruits() {
+                this.fruits = this.fruits.filter(fruit => {
+                    if (fruit.y > this.gameHeight + 50) {
+                        fruit.element.remove();
+                        return false;
+                    }
+                    return true;
+                });
+            }
+            
+            endGame() {
+                this.gameRunning = false;
+                this.finalScoreElement.textContent = this.score;
+                
+                if (this.score >= 200) {
+                    this.gameOverMessage.textContent = "🏆 Amazing! You're a fruit catching master!";
+                } else if (this.score >= 100) {
+                    this.gameOverMessage.textContent = "🎉 Great job! You've got good reflexes!";
+                } else if (this.score >= 50) {
+                    this.gameOverMessage.textContent = "👍 Not bad! Keep practicing!";
+                } else {
+                    this.gameOverMessage.textContent = "🎮 Good try! Practice makes perfect!";
+                }
+                
+                this.gameOverScreen.style.display = 'block';
+            }
+            
+            restartGame() {
+                // Reset game state
+                this.score = 0;
+                this.misses = 0;
+                this.fruitSpeed = 2;
+                this.spawnRate = 0.02;
+                
+                // Update UI
+                this.scoreElement.textContent = '0';
+                this.missesElement.textContent = '0';
+                this.gameOverScreen.style.display = 'none';
+                
+                // Clear existing fruits
+                this.fruits.forEach(fruit => {
+                    fruit.element.remove();
+                });
+                this.fruits = [];
+                
+                // Reset basket position
+                this.basketX = this.gameWidth / 2 - 30;
+                this.updateBasketPosition();
+                this.basket.style.transform = 'scale(1)';
+                
+                // Start new game
+                this.startGame();
+            }
+        }
+        
+        // Start the game when page loads
+        window.addEventListener('load', () => {
+            new FruitCatcherGame();
+        });
+        
+        // Prevent scrolling on mobile
+        document.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
